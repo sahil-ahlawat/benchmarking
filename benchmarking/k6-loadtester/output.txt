@@ -1,0 +1,1 @@
+time="2025-02-20T19:09:08Z" level=error msg="accepts 1 arg(s), received 2: arg should either be \"-\", if reading script from stdin, or a path to a script file"

@@ -1,0 +1,26 @@
+## Initial Run
+
+# Navigate to your project folder
+cd /path/to/your/project
+
+# Build the image
+docker build -t my-php-nginx .
+
+# Run the container with CPU and RAM limits
+docker run -d --name my-container -p 8082:80 --cpus=".3" --memory="200m" -v c:\MAMP\htdocs\learning\benchmarking\php:/var/www/html my-php-nginx
+
+# Visit 
+http://localhost:8082/any-php-file.php
+
+
+
+
+## When running again 
+# Remove a container but keep the image
+If you want to remove the container but keep the image so you can reuse it:
+
+docker rm my-container
+
+# Then, create a new container from the existing image:
+
+docker run -d --name my-container -p 8082:80 --cpus=".3" --memory="200m" -v c:\MAMP\htdocs\learning\benchmarking\php:/var/www/html my-php-nginx

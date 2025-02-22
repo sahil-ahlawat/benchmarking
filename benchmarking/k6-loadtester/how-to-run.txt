@@ -1,0 +1,25 @@
+First-Time Setup Commands
+1️⃣ Build the Docker Image
+
+cd c:\MAMP\htdocs\learning\benchmarking\k6-loadtester
+docker build -t k6-load-tester .
+
+📌 This builds the k6-load-tester image from your specified folder.
+
+2️⃣ Run the Container with Mounted Volume
+
+docker run --rm --name k6-container -v c:\MAMP\htdocs\learning\benchmarking\k6-loadtester:/k6-test k6-load-tester /k6-test/script.js
+
+📌 Runs k6 with a bind mount, allowing script.js to be edited without rebuilding.
+
+
+On second or later run
+Stop container 
+docker stop k6-container
+Delete container 
+docker remove k6-container 
+docker stop 
+Remove image 
+docker rmi k6-load-tester
+
+then follow start step from very start

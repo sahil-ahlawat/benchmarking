@@ -1,0 +1,3 @@
+Grafana, K6 Load tester and prometheus will run on this laptop.
+
+Node exporter and CA admin on server laptop
