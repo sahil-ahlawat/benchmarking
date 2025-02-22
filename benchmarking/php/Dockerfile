@@ -1,8 +1,8 @@
+# Use PHP 8.2-FPM base image
 FROM php:8.2-fpm  
-# Ensure youre using a PHP-FPM base image
 
 # Install required packages
-RUN apt-get update && apt-get install -y nginx supervisor
+RUN apt-get update && apt-get install -y nginx supervisor wget
 
 # Set working directory
 WORKDIR /var/www/html
@@ -22,8 +22,13 @@ RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 # Copy Supervisor config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Expose ports
-EXPOSE 80
+# Install Nginx Prometheus Exporter
+RUN wget https://github.com/nginxinc/nginx-prometheus-exporter/releases/latest/download/nginx-prometheus-exporter-linux-amd64 \
+    && chmod +x nginx-prometheus-exporter-linux-amd64 \
+    && mv nginx-prometheus-exporter-linux-amd64 /usr/local/bin/nginx-prometheus-exporter
 
-# Start Supervisor to manage both Nginx and PHP-FPM
+# Expose Nginx (port 80) and Prometheus Exporter (port 9113)
+EXPOSE 80 9113
+
+# Start Supervisor to manage Nginx, PHP-FPM, and Nginx Exporter
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
