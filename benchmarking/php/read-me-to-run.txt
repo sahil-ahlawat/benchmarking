@@ -7,7 +7,8 @@ cd /path/to/your/project
 docker build -t my-php-nginx .
 
 # Run the container with CPU and RAM limits
-docker run -d --name my-container -p 8082:80 --cpus=".3" --memory="200m" -v c:\MAMP\htdocs\learning\benchmarking\php:/var/www/html my-php-nginx
+docker run -d --name my-container -p 8082:80 -p 8081:8081 --cpus=".3" --memory="200m" -v c:\MAMP\htdocs\learning\benchmarking\php:/var/www/html my-php-nginx
+docker run -d --name my-container -p 8082:80 -p 8081:8081 -p 9113:9113 -p 3903:3903 --cpus=".9" --memory="100m" -v /var/www/html/benchmarking/benchmarking/php:/var/www/html my-php-nginx
 
 # Visit 
 http://localhost:8082/any-php-file.php
