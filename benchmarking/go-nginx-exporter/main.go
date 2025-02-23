@@ -15,14 +15,14 @@ import (
 
 // Prometheus metrics
 var (
-	successfulRequests = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	successfulRequests = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Name: "nginx_successful_requests",
 			Help: "Total number of successful HTTP requests",
 		},
 	)
-	errorRequests = prometheus.NewGauge(
-		prometheus.GaugeOpts{
+	errorRequests = prometheus.NewCounter(
+		prometheus.CounterOpts{
 			Name: "nginx_error_requests",
 			Help: "Total number of error HTTP requests",
 		},
@@ -34,6 +34,8 @@ var (
 		},
 	)
 )
+
+var prevHandled, prevTotal int
 
 // Register Prometheus metrics
 func init() {
@@ -96,8 +98,16 @@ func fetchNginxStatus(url string) error {
 		return fmt.Errorf("failed to parse total requests: %v", err)
 	}
 
-	successfulRequests.Set(float64(handled))
-	errorRequests.Set(float64(total - handled))
+	// Only increment if new values are greater than previous values
+	if handled > prevHandled {
+		successfulRequests.Add(float64(handled - prevHandled))
+	}
+	if total > prevTotal {
+		errorRequests.Add(float64((total - handled) - (prevTotal - prevHandled)))
+	}
+
+	prevHandled = handled
+	prevTotal = total
 
 	log.Printf("Total Requests: %d, Successful: %d, Errors: %d", total, handled, total-handled)
 	return nil
