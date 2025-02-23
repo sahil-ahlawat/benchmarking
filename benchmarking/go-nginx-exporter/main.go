@@ -1,26 +1,29 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
-	"os"
+	"net/http"
 	"regexp"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
 )
 
 // Prometheus metrics
 var (
-	totalRequests = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "nginx_total_requests",
-			Help: "Total number of HTTP requests by status code",
+	successfulRequests = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nginx_successful_requests",
+			Help: "Total number of successful HTTP requests",
 		},
-		[]string{"status_code"},
+	)
+	errorRequests = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "nginx_error_requests",
+			Help: "Total number of error HTTP requests",
+		},
 	)
 	up = prometheus.NewGauge(
 		prometheus.GaugeOpts{
@@ -32,22 +35,23 @@ var (
 
 // Register Prometheus metrics
 func init() {
-	prometheus.MustRegister(totalRequests)
+	prometheus.MustRegister(successfulRequests)
+	prometheus.MustRegister(errorRequests)
 	prometheus.MustRegister(up)
 }
 
 func main() {
-	nginxLogPath := "/var/log/nginx/access.log"
+	nginxStatusURL := "http://localhost:8080/nginx_status"
 
 	// Start Prometheus metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
-	// Start Nginx log monitoring
+	// Start Nginx status monitoring
 	go func() {
 		for {
-			err := parseNginxLogs(nginxLogPath)
+			err := fetchNginxStatus(nginxStatusURL)
 			if err != nil {
-				log.Printf("Error parsing Nginx logs: %v", err)
+				log.Printf("Error fetching Nginx status: %v", err)
 				up.Set(0)
 			} else {
 				up.Set(1)
@@ -60,34 +64,44 @@ func main() {
 	log.Fatal(http.ListenAndServe(":9114", nil))
 }
 
-// parseNginxLogs extracts request counts from access.log
-func parseNginxLogs(logPath string) error {
-	file, err := os.Open(logPath)
+// fetchNginxStatus extracts request counts from the nginx_status page
+func fetchNginxStatus(url string) error {
+	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to open log file: %v", err)
+		return fmt.Errorf("failed to fetch Nginx status: %v", err)
 	}
-	defer file.Close()
+	defer resp.Body.Close()
 
-	scanner := bufio.NewScanner(file)
-	statusCounts := make(map[string]int)
-
-	// Regular expression to extract HTTP status codes from logs
-	statusRegex := regexp.MustCompile(`\s(\d{3})\s`)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		matches := statusRegex.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			statusCode := matches[1]
-			statusCounts[statusCode]++
-		}
+	var body []byte
+	if _, err := resp.Body.Read(body); err != nil {
+		return fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	// Update Prometheus metrics
-	for status, count := range statusCounts {
-		totalRequests.WithLabelValues(status).Add(float64(count))
+	// Regex to extract accepts, handled, total requests
+	statusRegex := regexp.MustCompile(`\d+`)
+	matches := statusRegex.FindAllString(string(body), -1)
+	if len(matches) < 3 {
+		return fmt.Errorf("unexpected nginx_status format")
 	}
 
-	log.Printf("Status Counts: %v", statusCounts)
+	accepted, err := strconv.Atoi(matches[0])
+	if err != nil {
+		return fmt.Errorf("failed to parse accepted requests: %v", err)
+	}
+
+	handled, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return fmt.Errorf("failed to parse handled requests: %v", err)
+	}
+
+	total, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return fmt.Errorf("failed to parse total requests: %v", err)
+	}
+
+	successfulRequests.Set(float64(handled))
+	errorRequests.Set(float64(total - handled))
+
+	log.Printf("Total Requests: %d, Successful: %d, Errors: %d", total, handled, total-handled)
 	return nil
 }
