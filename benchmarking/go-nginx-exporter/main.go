@@ -4,14 +4,14 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 )
 
 // Prometheus metrics
@@ -19,7 +19,7 @@ var (
 	totalRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "nginx_total_requests",
-			Help: "Total number of HTTP requests",
+			Help: "Total number of HTTP requests by status code",
 		},
 		[]string{"status_code"},
 	)
@@ -38,22 +38,22 @@ func init() {
 }
 
 func main() {
-	nginxStatusURL := "http://localhost:8080/nginx_status"
+	nginxLogPath := "/var/log/nginx/access.log"
 
 	// Start Prometheus metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
-	// Start Nginx status monitoring
+	// Start Nginx log monitoring
 	go func() {
 		for {
-			err := fetchNginxStatus(nginxStatusURL)
+			err := parseNginxLogs(nginxLogPath)
 			if err != nil {
-				log.Printf("Error fetching Nginx status: %v", err)
+				log.Printf("Error parsing Nginx logs: %v", err)
 				up.Set(0)
 			} else {
 				up.Set(1)
 			}
-			time.Sleep(15 * time.Second) // Adjust interval as needed
+			time.Sleep(10 * time.Second) // Adjust interval as needed
 		}
 	}()
 
@@ -61,41 +61,25 @@ func main() {
 	log.Fatal(http.ListenAndServe(":9114", nil))
 }
 
-// fetchNginxStatus extracts real status counts from the Nginx status page
-func fetchNginxStatus(url string) error {
-	resp, err := http.Get(url)
+// parseNginxLogs extracts request counts from access.log
+func parseNginxLogs(logPath string) error {
+	file, err := os.Open(logPath)
 	if err != nil {
-		return fmt.Errorf("failed to fetch Nginx status: %v", err)
+		return fmt.Errorf("failed to open log file: %v", err)
 	}
-	defer resp.Body.Close()
+	defer file.Close()
 
-	scanner := bufio.NewScanner(resp.Body)
-	var requests int
-	var statusCounts = make(map[string]int)
+	scanner := bufio.NewScanner(file)
+	statusCounts := make(map[string]int)
 
-	// Regular expression to extract status codes
-	statusRegex := regexp.MustCompile(`\b(\d{3})\b`)
+	// Regular expression to extract HTTP status codes from logs
+	statusRegex := regexp.MustCompile(`\s(\d{3})\s`)
 
-	// Parse Nginx status page
-	lineNumber := 0
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		lineNumber++
-
-		if lineNumber == 3 { // Third line contains request counts
-			fields := strings.Fields(line)
-			if len(fields) >= 3 {
-				requests, err = strconv.Atoi(fields[2])
-				if err != nil {
-					return fmt.Errorf("failed to parse request count: %v", err)
-				}
-			}
-		}
-
-		// Extract status codes dynamically
-		matches := statusRegex.FindAllStringSubmatch(line, -1)
-		for _, match := range matches {
-			statusCode := match[1]
+		line := scanner.Text()
+		matches := statusRegex.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			statusCode := matches[1]
 			statusCounts[statusCode]++
 		}
 	}
@@ -105,6 +89,6 @@ func fetchNginxStatus(url string) error {
 		totalRequests.WithLabelValues(status).Add(float64(count))
 	}
 
-	log.Printf("Requests: %d | Status Counts: %v", requests, statusCounts)
+	log.Printf("Status Counts: %v", statusCounts)
 	return nil
 }
