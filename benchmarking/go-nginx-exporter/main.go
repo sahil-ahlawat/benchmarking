@@ -59,7 +59,7 @@ func main() {
 	}()
 
 	// Start HTTP server
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":9114", nil))
 }
 
 // fetchNginxStatus fetches Nginx status page and updates metrics
