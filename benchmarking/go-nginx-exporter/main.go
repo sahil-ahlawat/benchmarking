@@ -60,6 +60,7 @@ func main() {
 	// Start HTTP server
 	log.Fatal(http.ListenAndServe(":9114", nil))
 }
+
 // fetchNginxStatus fetches Nginx status page and updates metrics
 func fetchNginxStatus(url string) error {
 	resp, err := http.Get(url)
@@ -70,7 +71,7 @@ func fetchNginxStatus(url string) error {
 
 	// Declare variables to hold parsed values
 	var activeConnections, reading, writing, waiting int
-	var totalRequests, handledRequests, requests int
+	var totalRequestsCount, handledRequests, requests int // Renamed variable
 
 	// Use fmt.Fscanf to extract the data from the Nginx status page
 	_, err = fmt.Fscanf(resp.Body, "Active connections: %d\n", &activeConnections)
@@ -83,7 +84,7 @@ func fetchNginxStatus(url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse 'server accepts handled requests' line: %v", err)
 	}
-	_, err = fmt.Fscanf(resp.Body, "%d %d %d\n", &totalRequests, &handledRequests, &requests)
+	_, err = fmt.Fscanf(resp.Body, "%d %d %d\n", &totalRequestsCount, &handledRequests, &requests)
 	if err != nil {
 		return fmt.Errorf("failed to parse request counts: %v", err)
 	}
@@ -103,8 +104,8 @@ func fetchNginxStatus(url string) error {
 	totalRequests.WithLabelValues("4xx").Add(float64(error4xx))
 	totalRequests.WithLabelValues("5xx").Add(float64(error5xx))
 
-	log.Printf("Active connections: %d, Total Requests: %d, Reading: %d, Writing: %d, Waiting: %d", activeConnections, totalRequests, reading, writing, waiting)
-	log.Printf("Updated metrics: %d total requests, %d success (2xx), %d 4xx errors, %d 5xx errors", totalRequests, success, error4xx, error5xx)
+	log.Printf("Active connections: %d, Total Requests: %d, Reading: %d, Writing: %d, Waiting: %d", activeConnections, totalRequestsCount, reading, writing, waiting)
+	log.Printf("Updated metrics: %d total requests, %d success (2xx), %d 4xx errors, %d 5xx errors", totalRequestsCount, success, error4xx, error5xx)
 
 	return nil
 }
