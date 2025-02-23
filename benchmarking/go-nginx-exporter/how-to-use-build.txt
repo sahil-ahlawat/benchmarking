@@ -1,0 +1,1 @@
+go build -o nginx_exporter_go main.go
