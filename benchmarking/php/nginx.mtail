@@ -1,5 +1,0 @@
-counter http_requests_total by (status) {
-  /(\d{3})/ {
-    http_requests_total[$1]++
-  }
-}
