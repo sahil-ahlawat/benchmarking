@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Define Prometheus metrics
+// Prometheus metrics
 var (
 	totalRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -27,11 +31,8 @@ var (
 	)
 )
 
-// Track previous request count to calculate increments
-var prevRequests int
-
+// Register Prometheus metrics
 func init() {
-	// Register the metrics with Prometheus
 	prometheus.MustRegister(totalRequests)
 	prometheus.MustRegister(up)
 }
@@ -39,19 +40,20 @@ func init() {
 func main() {
 	nginxStatusURL := "http://localhost:8080/nginx_status"
 
-	// Expose metrics endpoint
+	// Start Prometheus metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
-	// Periodically fetch Nginx metrics
+	// Start Nginx status monitoring
 	go func() {
 		for {
-			if err := fetchNginxStatus(nginxStatusURL); err != nil {
+			err := fetchNginxStatus(nginxStatusURL)
+			if err != nil {
 				log.Printf("Error fetching Nginx status: %v", err)
-				up.Set(0) // Mark Nginx as down
+				up.Set(0)
 			} else {
-				up.Set(1) // Mark Nginx as up
+				up.Set(1)
 			}
-			time.Sleep(15 * time.Second)
+			time.Sleep(15 * time.Second) // Adjust interval as needed
 		}
 	}()
 
@@ -59,6 +61,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":9114", nil))
 }
 
+// fetchNginxStatus extracts real status counts from the Nginx status page
 func fetchNginxStatus(url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -66,39 +69,42 @@ func fetchNginxStatus(url string) error {
 	}
 	defer resp.Body.Close()
 
-	var activeConnections, reading, writing, waiting int
-	var accepted, handled, requests int
+	scanner := bufio.NewScanner(resp.Body)
+	var requests int
+	var statusCounts = make(map[string]int)
+
+	// Regular expression to extract status codes
+	statusRegex := regexp.MustCompile(`\b(\d{3})\b`)
 
 	// Parse Nginx status page
-	_, err = fmt.Fscanf(resp.Body, "Active connections: %d\n", &activeConnections)
-	if err != nil {
-		return fmt.Errorf("failed to parse active connections: %v", err)
+	lineNumber := 0
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		lineNumber++
+
+		if lineNumber == 3 { // Third line contains request counts
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				requests, err = strconv.Atoi(fields[2])
+				if err != nil {
+					return fmt.Errorf("failed to parse request count: %v", err)
+				}
+			}
+		}
+
+		// Extract status codes dynamically
+		matches := statusRegex.FindAllStringSubmatch(line, -1)
+		for _, match := range matches {
+			statusCode := match[1]
+			statusCounts[statusCode]++
+		}
 	}
 
-	_, err = fmt.Fscanf(resp.Body, "server accepts handled requests\n")
-	if err != nil {
-		return fmt.Errorf("failed to parse request headers: %v", err)
+	// Update Prometheus metrics
+	for status, count := range statusCounts {
+		totalRequests.WithLabelValues(status).Add(float64(count))
 	}
 
-	_, err = fmt.Fscanf(resp.Body, "%d %d %d\n", &accepted, &handled, &requests)
-	if err != nil {
-		return fmt.Errorf("failed to parse request counts: %v", err)
-	}
-
-	_, err = fmt.Fscanf(resp.Body, "Reading: %d Writing: %d Waiting: %d\n", &reading, &writing, &waiting)
-	if err != nil {
-		return fmt.Errorf("failed to parse connection states: %v", err)
-	}
-
-	// Calculate request difference since last check
-	increase := requests - prevRequests
-	if increase > 0 {
-		totalRequests.WithLabelValues("total").Add(float64(increase))
-	}
-	prevRequests = requests // Update previous count
-
-	log.Printf("Active: %d, Total Requests: %d (new: %d), Reading: %d, Writing: %d, Waiting: %d",
-		activeConnections, requests, increase, reading, writing, waiting)
-
+	log.Printf("Requests: %d | Status Counts: %v", requests, statusCounts)
 	return nil
 }
