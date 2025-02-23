@@ -61,7 +61,6 @@ func main() {
 	// Start HTTP server
 	log.Fatal(http.ListenAndServe(":9114", nil))
 }
-
 // fetchNginxStatus fetches Nginx status page and updates metrics
 func fetchNginxStatus(url string) error {
 	resp, err := http.Get(url)
@@ -70,29 +69,43 @@ func fetchNginxStatus(url string) error {
 	}
 	defer resp.Body.Close()
 
-	// Example of response format (text-based):
-	// Active connections: 291 
-	// server accepts handled requests
-	// 111111 111111 222222
-	// Reading: 0 Writing: 1 Waiting: 2
-	var total, success, error4xx, error5xx int
-	_, err = fmt.Fscanf(resp.Body, "Active connections: %d\n", &total)
+	// Declare variables to hold parsed values
+	var activeConnections, reading, writing, waiting int
+	var totalRequests, handledRequests, requests int
+
+	// Use fmt.Fscanf to extract the data from the Nginx status page
+	_, err = fmt.Fscanf(resp.Body, "Active connections: %d\n", &activeConnections)
 	if err != nil {
-		return fmt.Errorf("failed to parse Nginx status: %v", err)
+		return fmt.Errorf("failed to parse 'Active connections': %v", err)
 	}
 
-	// Dummy data for requests
-	// In a real scenario, extract real counts from the status page response
-	success = 1000
-	error4xx = 50
-	error5xx = 20
+	// Skip the next two lines
+	_, err = fmt.Fscanf(resp.Body, "server accepts handled requests\n")
+	if err != nil {
+		return fmt.Errorf("failed to parse 'server accepts handled requests' line: %v", err)
+	}
+	_, err = fmt.Fscanf(resp.Body, "%d %d %d\n", &totalRequests, &handledRequests, &requests)
+	if err != nil {
+		return fmt.Errorf("failed to parse request counts: %v", err)
+	}
+
+	// Get the last line for Reading, Writing, and Waiting values
+	_, err = fmt.Fscanf(resp.Body, "Reading: %d Writing: %d Waiting: %d\n", &reading, &writing, &waiting)
+	if err != nil {
+		return fmt.Errorf("failed to parse 'Reading Writing Waiting' line: %v", err)
+	}
+
+	// Now update your Prometheus metrics with the values
+	// Example: Update success/error request counts (you may need to extract actual data)
+	success, error4xx, error5xx := 1000, 50, 20 // Replace with actual parsing if available
 
 	// Update Prometheus metrics
 	totalRequests.WithLabelValues("2xx").Add(float64(success))
 	totalRequests.WithLabelValues("4xx").Add(float64(error4xx))
 	totalRequests.WithLabelValues("5xx").Add(float64(error5xx))
 
-	log.Printf("Updated metrics: %d total requests, %d success (2xx), %d 4xx errors, %d 5xx errors", total, success, error4xx, error5xx)
+	log.Printf("Active connections: %d, Total Requests: %d, Reading: %d, Writing: %d, Waiting: %d", activeConnections, totalRequests, reading, writing, waiting)
+	log.Printf("Updated metrics: %d total requests, %d success (2xx), %d 4xx errors, %d 5xx errors", totalRequests, success, error4xx, error5xx)
 
 	return nil
 }
