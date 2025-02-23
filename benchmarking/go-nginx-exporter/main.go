@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -72,8 +74,8 @@ func fetchNginxStatus(url string) error {
 	}
 	defer resp.Body.Close()
 
-	var body []byte
-	if _, err := resp.Body.Read(body); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return fmt.Errorf("failed to read response body: %v", err)
 	}
 
@@ -82,11 +84,6 @@ func fetchNginxStatus(url string) error {
 	matches := statusRegex.FindAllString(string(body), -1)
 	if len(matches) < 3 {
 		return fmt.Errorf("unexpected nginx_status format")
-	}
-
-	accepted, err := strconv.Atoi(matches[0])
-	if err != nil {
-		return fmt.Errorf("failed to parse accepted requests: %v", err)
 	}
 
 	handled, err := strconv.Atoi(matches[1])
