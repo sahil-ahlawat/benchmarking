@@ -19,7 +19,6 @@ var (
 		},
 		[]string{"status_code"}, // This will differentiate between 2xx, 4xx, 5xx etc.
 	)
-
 	up = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "nginx_up",
