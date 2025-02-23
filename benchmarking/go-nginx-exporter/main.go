@@ -35,7 +35,7 @@ func init() {
 
 func main() {
 	// Set Nginx status page URL
-	nginxStatusURL := "http://localhost/nginx_status"
+	nginxStatusURL := "http://localhost:8080/nginx_status"
 
 	// Set up HTTP server for exposing Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
