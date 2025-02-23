@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 
 // Simulate database query delay
-usleep(rand(200000, 500000)); // Sleep for 200-500ms to mimic DB latency
+//usleep(rand(200000, 500000)); // Sleep for 200-500ms to mimic DB latency
 
 // Function to generate a random string
 function randomString($length = 100) {
