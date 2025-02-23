@@ -25,7 +25,8 @@ COPY default.conf /etc/nginx/conf.d/default.conf
 
 # Expose required ports
 EXPOSE 80
-EXPOSE 9113  # Port for nginx_exporter_go
+EXPOSE 9113  
+# Port for nginx_exporter_go
 
 # Start Nginx and the nginx_exporter_go exporter
 CMD service nginx start && /usr/local/bin/nginx_exporter_go & php-fpm -F
